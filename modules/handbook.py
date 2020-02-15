@@ -1,184 +1,112 @@
-# code by nicc
-# yellowflower
+# Code by Nicc
+# YellowFlower
 
-# module: handbook
-# scrapes the UNSW handbook for course information
+# Module: handbook
+# Scrapes the UNSW handbook for course information
 
-import asyncio
+import discord
 
-import bs4
-import requests
+import re, typing
 
-import json, re, subprocess
+from modules.newhandbook.description import fetch_description
+from modules.newhandbook.info import HandbookDetails
+from modules.newhandbook.utilisation import fetch_utilisation
 
-
-# course database
-courses = {}
-with open('search/courses.json', 'r') as f:
-	courses = json.loads(f.read())
+import modules.helper as helper
 
 
-# requests a bs4 object from a url
-def load_page(url):
-	full_url = 'https://www.handbook.unsw.edu.au/undergraduate/' + url
-	page = requests.get(full_url)
+def handbook_embed(course_info: HandbookDetails) -> discord.Embed:
+	embed = discord.Embed(colour=helper.embed_colour, title=course_info.title, description=course_info.description, url=course_info.url)
+	embed.set_footer(text='YellowFlower Handbook Command - Using UNSW 2020 Handbook')
+	embed.set_thumbnail(url='https://yt3.ggpht.com/a/AGF-l7_fK0Hy4B4JO8ST-uGqSU69OTLHduk4Kri_fQ=s288-c-k-c0xffffffff-no-rj-mo')
 
-	print('handbook: DEBUG: url ' + full_url + '...')
-
-	if page.status_code != 200:
-		full_url = 'https://www.handbook.unsw.edu.au/postgraduate/' + url
-		page = requests.get(full_url)
-
-		print('handbook: DEBUG: url ' + full_url + '...')
-
-		if page.status_code != 200:
-			return None, None
-
-	soup = bs4.BeautifulSoup(page.text, features='lxml')
-
-	return soup, full_url
-
-
-# gets the details of a subject as an object
-async def subject_details(code):
-	code = re.sub(r'[^A-Z0-9]', '', code.upper())
-
-	soup, full_url = load_page('courses/2019/' + code)
-
-	if soup is None:
-		return None
-
-	course_title = re.sub(r'^\s+|\s+$', '', soup.find('span', attrs={'data-hbui' : 'module-title'}).string)
-
-	course_offerings_tag = soup.find('strong', string=re.compile('Offering Terms'))
-
-	course_offerings = 'None'
-
-	if course_offerings_tag:
-		course_offerings = re.sub(r'^\s+|\s+$', '', course_offerings_tag.parent.contents[3].string)
-
-	course_conditions_tag = soup.find('div', id='readMoreSubjectConditions')
-
-	course_conditions = ''
-
-	if course_conditions_tag:
-		for string in course_conditions_tag.contents[1].contents[1].strings:
-			course_conditions += string
-	else:
-		course_conditions = 'None'
-
-	course_conditions = re.sub(r'^\s+|\s+$', '', course_conditions)
-
-	course_description_tag = soup.find('div', id='readMoreIntro')
-
-	course_description = ''
-
-	if len(course_description_tag.contents[1].contents) > 1 and course_description_tag.contents[1].contents[1].name == 'p':
-		for string in course_description_tag.contents[1].contents[1].strings:
-			course_description += string
-	else:
-		course_description = course_description_tag.contents[1].contents[0].string
-
-	course_description = re.sub(r'^\s+|\s+$', '', course_description)
-
-	return {
-		'title' : course_title,
-		'description' : course_description,
-		'offerings' : course_offerings,
-		'conditions' : course_conditions,
-		'link' : full_url
-	}
-
-
-# determines what the user was requesting (course / program / specialisation) and returns appropriate details
-async def handle_query(query):
-	if re.search(r'^[a-zA-Z]{4}[0-9]{4}$', query):
-		return await subject_details(query)
-	else:
-		return None
-
-
-# string distance utility function
-# just use the one from wikipedia
-def levenshtein_damerau(s1, s2):
-	cost = 0
-
-	if len(s1) == 0:
-		return len(s2)
-	if len(s2) == 0:
-		return len(s1)
+	embed.add_field(name='Offerings', value=course_info.offering, inline=False)
 	
-	if s1[-1] == s2[-1]:
-		cost = 0
-	else:
-		cost = 1
-
-	other = 100000
-	if len(s1) > 1 and len(s2) > 1 and s1[-2] == s2[-1] and s1[-1] == s2[-2]:
-		other = levenshtein_damerau(s1[:-2], s2[:-2]) + cost
-
-	return min([
-		levenshtein_damerau(s1[:-1], s2) + 1,
-		levenshtein_damerau(s1, s2[:-1]) + 1,
-		levenshtein_damerau(s1[:-1], s2[:-1]) + cost,
-		other
-	])
+	if course_info.conditions is not None:
+		embed.add_field(name='Requirements', value=course_info.conditions, inline=False)
+	
+	if course_info.equivalent is not None:
+		embed.add_field(name='Equivalent Courses', value=course_info.equivalent, inline=False)
+	
+	if course_info.exclusion is not None:
+		embed.add_field(name='Exclusion Courses', value=course_info.exclusion, inline=False)
+	
+	return embed
 
 
-# search the "handbook" by actually searching our internal database
-async def handbook_search(query):
-	if re.search(r'^[0-9]{4}$', query):
-		results = {}
+def utilisation_embed(code: str, term: str, classes: typing.List[typing.Dict[str, str]]) -> discord.Embed:
+	embed = discord.Embed(colour=helper.embed_colour, title=f'{code} {term}', description=f'The following classes are available for {code} in {term}')
+	embed.set_footer(text='YellowFlower Handbook Command - Using UNSW 2020 Class Utilisation')
+	embed.set_thumbnail(url='https://yt3.ggpht.com/a/AGF-l7_fK0Hy4B4JO8ST-uGqSU69OTLHduk4Kri_fQ=s288-c-k-c0xffffffff-no-rj-mo')
 
-		i = 0
-		for area in courses:
-			for course in courses[area]['courses']:
-				d = levenshtein_damerau(course[4:], query)
-				results[course + ' ' + courses[area]['courses'][course]] = d
+	for class_info in classes:
+		class_type = {
+			'LEC' : 'Lecture',
+			'TUT' : 'Tutorial',
+			'LAB' : 'Laboratory',
+			'TLB' : 'Tutorial / Laboratory',
+			'SEM' : 'Seminar',
+			'OTH' : 'Other'
+		}.get(class_info['type'], 'Unknown')
+
+		class_status = 'Unknown \U0001F62E'
+
+		if class_info['status'] == 'Open':
+			enrolled = int(class_info['enrolled'])
+			capacity = int(class_info['capacity'])
+			full = 100.0 * enrolled / capacity
+
+			class_status = f'Open ({enrolled}/{capacity} - {full:.1f}% full) '
+
+			if full > 95.0 or capacity - enrolled <= 1:
+				class_status += '\U0001F631'
+			elif full > 75.0 or capacity - enrolled <= 3:
+				class_status += '\U0001F623'
+			elif full > 50.0:
+				class_status += '\U0001F642'
+			else:
+				class_status += '\U0001F60C'
+		elif class_info['status'] == 'Closed':
+			class_status = 'Closed \U0001F634'
+		elif class_info['status'] == 'Canc':
+			class_status = 'Cancelled \U0001F622'
+		elif class_info['status'] == 'Tent':
+			class_status = 'Tentative \U0001F914'
+		elif class_info['status'] == 'Full':
+			class_status = 'Full \U0001F624'
+
+		embed.add_field(name=f'{class_type} {class_info["name"]} ({class_info["code"]})', value=class_status, inline=False)
+	
+	return embed
+
+
+class Handbook(discord.ext.commands.Cog):
+
+	def __init__(self, yellow: discord.ext.commands.Bot):
+		self.bot = yellow
+	
+	@discord.ext.commands.command(name='handbook', help='Search for information on the UNSW handbook')
+	async def handbook(self, ctx: discord.ext.commands.Context, *args):
+		if not args or len(args) == 0 or not re.fullmatch(r'[a-zA-Z]{4}[0-9]{4}', args[0]):
+			await ctx.channel.send('Please provide a valid course code, e.g. COMP2041')
+			return
 		
-		displayed_results = list(filter(lambda x: results[x] < 2, results.keys()))
-		displayed_results.sort(key=lambda x: results[x])
-		
-		return displayed_results
-	elif re.search(r'^[0-9]{4}[a-z]{4}', query.lower()):
-		results = {}
+		info = fetch_description(2020, args[0].upper())
 
-		i = 0
-		for area in courses:
-			for course in courses[area]['courses']:
-				d = levenshtein_damerau(course.lower(), query.lower())
-				results[course + ' ' + courses[area]['courses'][course]] = d
+		if info is None:
+			await ctx.channel.send(f'Could not find any information on \'{args[0].upper()}\'')
+		else:
+			await ctx.channel.send('', embed=handbook_embed(info))
+	
+	@discord.ext.commands.command(name='util', help='Search for class utilisation information')
+	async def util(self, ctx: discord.ext.commands.Context, *args):
+		if not args or len(args) < 2 or not re.fullmatch(r'[a-zA-Z]{4}[0-9]{4}', args[0]) or not re.fullmatch(r'[TU][123]', args[1]):
+			await ctx.channel.send('Please provide a valid course code and term')
+			return
 		
-		displayed_results = list(filter(lambda x: results[x] < 3, results.keys()))
-		displayed_results.sort(key=lambda x: results[x])
-		
-		return displayed_results
-	else:
-		q_tokens = list(filter(lambda x: len(x) > 0, re.split(r'\W', query.lower())))
-		print('query tokens: ' + ' '.join(q_tokens))
-		results = {}
+		classes = fetch_utilisation(args[1].upper(), args[0].upper())
 
-		if re.search(r'^[a-z]{4}$', query.lower()):
-			for area in courses:
-				for course in courses[area]['courses']:
-					d = levenshtein_damerau(course[:4].lower(), query.lower())
-					results[course + ' ' + courses[area]['courses'][course]] = d
-
-		for i in range(len(q_tokens)):
-			q_tokens[i] = re.sub(r'[^A-Za-z0-9-:]', '', q_tokens[i])
-		
-		search_ldd = subprocess.run(['./search/search_ldd'] + q_tokens, stdout=subprocess.PIPE).stdout.decode('utf-8').split('\n')
-
-		for result in search_ldd:
-			pair = result.split('|')
-			if len(pair) < 2:
-				break
-			results[pair[0]] = int(pair[1])
-		
-		intermediate = list(results.keys())
-		intermediate.sort(key=lambda x: results[x])
-
-		return intermediate
-		
-		search_final = subprocess.run(['./search/combine'], input='\n'.join(intermediate).encode('utf-8', 'ignore'), stdout=subprocess.PIPE).stdout.decode('utf-8').split('\n')
-		return search_final
+		if classes is None:
+			await ctx.channel.send(f'Could not find any information on \'{args[0].upper()}\' in {args[1].upper()}')
+		else:
+			await ctx.channel.send('', embed=utilisation_embed(args[0].upper(), args[1].upper(), classes))

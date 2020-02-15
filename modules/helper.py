@@ -15,7 +15,7 @@ embed_upset = discord.Embed(colour=embed_colour).set_image(url = 'https://imgur.
 
 # A fixed method of finding the 'default' text channel in a guild
 # Thanks Concord
-def fixed_default_channel(yellow, guild):
+def fixed_default_channel(yellow: discord.ext.commands.Bot, guild: discord.Guild) -> discord.TextChannel:
 	channel_id = None
 	if yellow.server_settings[str(guild.id)]['active_channel']:
 		channel_id = yellow.server_settings[str(guild.id)]['active_channel']
@@ -43,13 +43,13 @@ def fixed_default_channel(yellow, guild):
 
 
 # Prints a username even if there are non-ascii characters in it
-def fixed_username(username):
+def fixed_username(username: str) -> str:
 	return username.encode('ascii', 'ignore').decode('utf-8', 'ignore')
 
 
 # Only useful once - leaves any servers where there's no server settings entry
 # Basically, leave any old servers
-async def cleanup(yellow):
+async def cleanup(yellow: discord.ext.commands.Bot) -> None:
 	for guild in yellow.guilds:
 		if str(guild.id) not in yellow.server_settings:
 			print('helper: leaving ' + str(guild.id) + '(' + str(guild.name) + ')')

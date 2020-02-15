@@ -4,22 +4,29 @@
 # Module: boredom
 # Provides light entertainment
 
-import os, random, subprocess
+import random, subprocess
 
-# Gets the output of forture, occasionally piping through cowsay
-def entertainment():
-	f = open('fortune.txt', 'w')
+import discord
 
-	if random.randint(0, 100) == 0:
-		p = subprocess.Popen(['fortune', '-a'], stdout=subprocess.PIPE)
-		subprocess.call(['cowsay', '-f', 'bud-frogs'], stdout=f, stdin=p.stdout)
-	else:
-		subprocess.call(['fortune', '-a'], stdout=f)
 
-	f.close()
+class Boredom(discord.ext.commands.Cog):
 	
-	f = open('fortune.txt', 'r')
-	txt = f.read()
-	os.remove('fortune.txt')
+	def __init__(self, yellow: discord.ext.commands.Bot):
+		self.bot = yellow
+	
+	@discord.ext.commands.Cog.listener()
+	async def on_message(self, message: discord.Message) -> None:
+		if not message.content.startswith('im bored'):
+			return
 
-	return '```\n' + txt + '\n```'
+		text = ''
+
+		if random.randint(0, 100) == 0:
+			p1 = subprocess.Popen(['fortune', '-a'], stdout=subprocess.PIPE)
+			p2 = subprocess.call(['cowsay', '-f', 'bud-frogs'], stdout=subprocess.PIPE, stdin=p.stdout)
+			text, _ = p2.communicate()
+		else:
+			p = subprocess.Popen(['fortune', '-a'], stdout=subprocess.PIPE)
+			text, _ = p.communicate()
+			
+		await message.channel.send(f'```\n{text.decode("utf-8", "ignore")}\n```')

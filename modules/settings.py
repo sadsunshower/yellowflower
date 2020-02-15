@@ -4,13 +4,13 @@
 # Module: settings
 # Manages server settings database
 
-import json, os, threading
+import json, os, threading, typing
 
 server_settings_lock = threading.Lock()
 
 
 # Loads server settings from a file
-def load_server_settings():
+def load_server_settings() -> typing.Optional[typing.Dict[str, typing.Any]]:
 	global server_settings_lock
 
 	server_settings_lock.acquire()
@@ -28,7 +28,7 @@ def load_server_settings():
 
 
 # Saves server settings to a file
-def save_server_settings(server_settings):
+def save_server_settings(server_settings: typing.Optional[typing.Dict[str, typing.Any]]) -> None:
 	global server_settings_lock
 
 	server_settings_lock.acquire()
@@ -43,8 +43,8 @@ def save_server_settings(server_settings):
 	return
 
 
-# Loads server settings from a file
-def load_bot_settings():
+# Loads bot settings from a file
+def load_bot_settings() -> typing.Optional[typing.Dict[str, typing.Any]]:
 	with open('data/bot_settings.json', 'r') as f:
 		bot_settings = json.loads(f.read())
 

@@ -1,9 +1,6 @@
 data/*
-search/combine
-search/search_ldd
-search/combine.c
-search/footrule.c
-search/footrule.h
 .vscode
 __pycache__/
 old/
+venv/
+yellowflower.tar.xz
