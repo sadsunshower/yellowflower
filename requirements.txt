@@ -35,7 +35,7 @@ lazy-object-proxy==1.4.3
 louis==3.8.0
 lxml==4.4.2
 macaroonbakery==1.2.1
-Mako==1.0.7
+Mako==1.2.2
 MarkupSafe==1.1.0
 mccabe==0.6.1
 multidict==4.7.1
