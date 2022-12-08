@@ -8,7 +8,7 @@ beautifulsoup4==4.8.1
 blinker==1.4
 Brlapi==0.6.7
 bs4==0.0.1
-certifi==2018.8.24
+certifi==2022.12.7
 chardet==3.0.4
 Click==7.0
 command-not-found==0.3
